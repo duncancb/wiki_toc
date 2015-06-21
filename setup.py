@@ -3,10 +3,6 @@ import os
 from setuptools import setup, find_packages
 
 here = os.path.abspath(os.path.dirname(__file__))
-with open(os.path.join(here, 'README.txt')) as f:
-    README = f.read()
-with open(os.path.join(here, 'CHANGES.txt')) as f:
-    CHANGES = f.read()
 
 requires = [
     'pyramid',
@@ -18,7 +14,7 @@ requires = [
 setup(name='wiki_toc',
       version='0.0',
       description='wiki_toc',
-      long_description=README + '\n\n' + CHANGES,
+      long_description="An example web site that scrapes the TOC from Wikipaedia",
       classifiers=[
         "Programming Language :: Python",
         "Framework :: Pyramid",

@@ -1,0 +1,14 @@
+<html metal:use-macro="load: layout.pt">
+    <!--This page is laid out as a full html document for previewing purposes.
+        The template message is in <form metal:fill-slot="page-message">
+        The template content is in <form metal:fill-slot="page-content">
+    -->
+<body>
+    
+    <metal:content metal:fill-slot="page-message">Please enter a Wikipaedia location and click 'Submit'.</metal:content>
+    <form metal:fill-slot="page-content" id="form-choose-wiki-page" method="post" action="${post_url}">
+        <input name="target_wiki_page" value="" />
+        <input type="submit" name="submit" value="Submit" />
+    </form>
+</body>
+</html>

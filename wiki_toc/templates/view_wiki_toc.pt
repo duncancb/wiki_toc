@@ -1,0 +1,11 @@
+<html metal:use-macro="load: layout.pt">
+    <!--This page is laid out as a full html document for previewing purposes.
+        The template message is in <form metal:fill-slot="page-message">
+        The template content is in <form metal:fill-slot="page-content">
+    -->
+<body>
+    <div id="toc" metal:fill-slot="page-content">
+        ${structure: toc}
+    </div>
+</body>
+</html>
