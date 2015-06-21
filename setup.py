@@ -9,6 +9,8 @@ requires = [
     'pyramid_chameleon',
     'pyramid_debugtoolbar',
     'waitress',
+    'lxml',
+    'beautifulsoup4'
     ]
 
 setup(name='wiki_toc',

@@ -28,5 +28,6 @@
         <ul>
             <li tal:repeat="error errors">${error}</li>
         </ul>
+    </div>
   </body>
 </html>
