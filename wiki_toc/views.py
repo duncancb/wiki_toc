@@ -46,11 +46,14 @@ class UrlManager(object):
     def to_list(self):
         return list(self._urlobj)
 
-    def absolute_url(self, reference_url_object):
+    def absolute_url(self, reference_url_object=None):
         """ Given a reference url object, provide any of the following values, if they are missing: scheme, netloc, relative path, query string
             reference_url_object should be an instance of urlparse.ParseResult or an equivalent object
             This way href="#introduction" becomes href="<full path># introduction"
         """
+        if not reference_url_object:
+            return urlparse.urlunparse(self._urlobj)
+
         # Convert the url object for this instance to a list
         result = list(self._urlobj)
 
@@ -61,7 +64,7 @@ class UrlManager(object):
             result[1] = reference_url_object.netloc
         if not self._urlobj.path:
             result[2] = reference_url_object.path
-        if not self._urlobj.query:
+        if not self._urlobj.path and not self._urlobj.query:    # Only overwrite the query string if there is no path i.e. treat the querystring as an extension of the path
             result[4] = reference_url_object.query
 
         # Return the result list converted to a url
@@ -100,6 +103,7 @@ def get_wiki_page_redirect(request, errors):
         else:
             logging.error("User supplied url, '%s', is not a valid wikipedia url.", target_wiki_page)
             errors.append("'%s' is not a valid wikipedia url. Please try again." % target_wiki_page)
+            return None
     except BaseException, e:
         # An unexpected error has occurred. Remain on the current page and display the error.
         logging.error("Error while determining redirect url: %s", e)

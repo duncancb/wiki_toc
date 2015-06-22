@@ -37,6 +37,54 @@ class ViewTests(unittest.TestCase):
     def tearDown(self):
         testing.tearDown()
 
+    def test_get_wiki_page_redirect(self):
+        """ While this is not a view it is integral to their function so the test is included in this class
+        """
+        from .views import get_wiki_page_redirect
+        from pyramid.httpexceptions import HTTPInternalServerError, HTTPFound
+        request = testing.DummyRequest()
+        errors = []
+
+        # Test with no POST
+        self.assertEqual(get_wiki_page_redirect(request, errors), None)
+        self.assertEqual(errors, [])
+
+        # Test with a POST containing the wrong fields
+        request.POST["something"] = "Anything"
+        self.assertTrue(isinstance(get_wiki_page_redirect(request, errors), HTTPInternalServerError))
+        self.assertEqual(errors, [])
+
+        request = testing.DummyRequest()
+        errors = []
+
+        # Test with a POST containing the right fields an invalid location
+        request.POST["target_wiki_page"] = "Anything"
+        self.assertEqual(get_wiki_page_redirect(request, errors), None)
+        self.assertEqual(errors, ["'Anything' is not a valid wikipedia url. Please try again."])
+
+        request = testing.DummyRequest()
+        errors = []
+
+        # Test with POSTs containing some valid locations
+        request.POST["target_wiki_page"] = "en.wikipedia.org/wiki/Satchel"
+        response = get_wiki_page_redirect(request, errors)
+        self.assertTrue(isinstance(response, HTTPFound))
+        self.assertEqual(response.location, request.route_url('wiki_toc', wiki_location="en.wikipedia.org/wiki/Satchel"))
+        self.assertEqual(errors, [])
+        # Repeat the last test with a full url
+        request.POST["target_wiki_page"] = "https://en.wikipedia.org/wiki/Satchel"
+        response = get_wiki_page_redirect(request, errors)
+        self.assertTrue(isinstance(response, HTTPFound))
+        self.assertEqual(response.location, request.route_url('wiki_toc', wiki_location="en.wikipedia.org/wiki/Satchel"))
+        self.assertEqual(errors, [])
+        # Repeat the last test with relative url (it is assumed that wikipedia is the target site)
+        request.POST["target_wiki_page"] = "/wiki/Satchel"
+        response = get_wiki_page_redirect(request, errors)
+        self.assertTrue(isinstance(response, HTTPFound))
+        self.assertEqual(response.location, request.route_url('wiki_toc', wiki_location="wikipedia.org/wiki/Satchel"))
+        self.assertEqual(errors, [])
+        
+
     def test_choose_wiki_page(self):
         from .views import choose_wiki_page
         from pyramid.httpexceptions import HTTPFound
@@ -97,3 +145,57 @@ class ViewTests(unittest.TestCase):
         self.assertEqual(str(info['toc']), "")
         self.assertEqual(info['errors'], ["Could not get the table of contents for 'test_any_error'"])
         
+class UrlManagerTests(unittest.TestCase):
+    def test_init(self):
+        from .views import UrlManager
+        
+        # Test full url
+        url = "https://www.google.com/path/index.htm?query=1#anchor"
+        um = UrlManager(url)
+        self.assertEqual(um.absolute_url(), url)
+        
+        # Test full url with redundant fallbacks
+        um = UrlManager(url, "http", "www.yahoo.com")
+        self.assertEqual(um.absolute_url(), url, "Fallbacks should be ignored for a full url")
+
+        # Test fallbacks
+        url="/wiki/Satchel" # '/' is taken to indicate a relative path
+        um = UrlManager(url, "http://")
+        self.assertEqual(um.absolute_url(), url, "Fallback scheme should be ignored for relative urls")
+        
+        url="wiki/Satchel" # This should be assumed to be an absolute path path
+        um = UrlManager(url, "http://")
+        self.assertEqual(um.absolute_url(), "http://"+url, "Fallback scheme should be included for non-relative urls")
+
+    def test_matches_domain(self):
+        from .views import UrlManager
+        um = UrlManager("https://www.google.com/path/index.htm?query=1#anchor")
+        self.assertTrue(um.matches_domain("google.com"))
+
+    def test_url_is_relative(self):
+        from .views import UrlManager
+        um = UrlManager("https://www.google.com/path/index.htm?query=1#anchor")
+        self.assertFalse(um.url_is_relative())
+        um = UrlManager("/path/index.htm?query=1#anchor")
+        self.assertTrue(um.url_is_relative())
+
+    def test_to_list(self):
+        from .views import UrlManager
+        um = UrlManager("https://www.google.com/path/index.htm?query=1#anchor")
+        self.assertEqual(um.to_list(),["https", "www.google.com", "/path/index.htm", "", "query=1" ,"anchor"])
+
+    def test_absolute_url(self):
+        from .views import UrlManager
+        from urlparse import urlparse 
+        
+        reference_url = urlparse("https://www.google.com/path/index.htm?query=1#anchor")
+        um = UrlManager("/new_path/text.htm")
+        self.assertEqual(um.absolute_url(reference_url), "https://www.google.com/new_path/text.htm", "absolute_url should ignore the query string if a relative path is provided")
+
+        um = UrlManager("/")
+        self.assertEqual(um.absolute_url(reference_url), "https://www.google.com/", "absolute_url should ignore the query string if a relative path is provided")
+
+        um = UrlManager("#test")
+        self.assertEqual(um.absolute_url(reference_url), "https://www.google.com/path/index.htm?query=1#test", "absolute_url should duplicate the full url for relative anchor tags")
+
+
