@@ -9,7 +9,7 @@ import logging
 # even though it would be more useful to derive them from database configuration
 default_template_parameters = dict(
     title = "Table of Contents Scraper",
-    errors = None
+    errors = []
 )
 
 wikipedia_scheme = "https://"
@@ -106,6 +106,14 @@ def get_wiki_page_redirect(request, errors):
         errors.append("Cannot locate the wikipedia page for '%s'" % target_wiki_page)
         return None
 
+def get_soup(url):
+    """ Loads html from url and returns the parsed results
+        Throws any exeptions raised by urllib2 or BeautifulSoup
+    """
+    page = urllib2.urlopen(url)
+    html = page.read()
+    return BeautifulSoup(html, 'lxml')
+
 @view_config(route_name='choose_wiki_page', renderer='templates/choose_wiki_page.pt')
 def choose_wiki_page(request):
     """ This view displays a form for requesting the table of contents for a wikipedia page.
@@ -132,15 +140,14 @@ def wiki_toc(request):
         # Get the relative path to the wikipedia resouce; it is always defined by the trailing components of the 'wiki_toc' route
         wiki_location = "/".join(request.matchdict["wiki_location"])
         template_parameters["title"] = wiki_location
+        template_parameters["toc"] = ''   # Set a default value
         
         # Fetch the page  - not that the default timeout for urllib2 is being used
         try:
             # Prepend the default wikipedia scheme to the url location (which should be 'https://')
             url = wikipedia_scheme + wiki_location
             reference_url_object = urlparse.urlparse(url)
-            page = urllib2.urlopen(url)
-            html = page.read()
-            soup = BeautifulSoup(html, 'lxml')
+            soup = get_soup(url)
             
             # Get the div containing the table of contents
             toc = soup.find_all('div', id="toc", limit=1)
@@ -159,13 +166,18 @@ def wiki_toc(request):
                 errors.append("No table of contents is available.")
 
             template_parameters["toc"] = toc
+        except urllib2.URLError, e:
+            logging.error("Failed to process the contents of '%s' due to url error: %s", url, str(e))
+            errors.append("The url '%s' does not appear to be valid" % wiki_location)
+        except urllib2.HTTPError, e:
+            logging.error("Failed to process the contents of '%s' due to http error: %s", url, str(e))
+            errors.append("Could not access the url '%s'" % wiki_location)
         except BaseException, e:
             logging.error("Failed to process the contents of '%s' due to error: %s", url, str(e))
             errors.append("Could not get the table of contents for '%s'" % wiki_location)
-            template_parameters["toc"] = None
     else:
         template_parameters["title"] = "No wikipedia page provided" 
-        template_parameters["toc"] = None
+        template_parameters["toc"] = ''
         errors.append("No wikipedia location has been provided.")
 
     template_parameters["errors"] = errors

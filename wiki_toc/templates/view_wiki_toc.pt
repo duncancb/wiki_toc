@@ -7,7 +7,7 @@
     <div id="toc" metal:fill-slot="page-content">
         <div>
             <a href="${request.route_url('choose_wiki_page')}"><button type="button" border="0">Restart</button></a>
-        </div>
+        </div><br/>
         ${structure: toc}
     </div>
 </body>

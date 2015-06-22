@@ -10,7 +10,8 @@ requires = [
     'pyramid_debugtoolbar',
     'waitress',
     'lxml',
-    'beautifulsoup4'
+    'beautifulsoup4',
+    'WebTest'
     ]
 
 setup(name='wiki_toc',
