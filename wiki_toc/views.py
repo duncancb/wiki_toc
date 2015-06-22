@@ -15,29 +15,57 @@ default_template_parameters = dict(
 wikipedia_scheme = "https://"
 wikipedia_domain = "wikipedia.org"
 
-def is_relative_url(url):
-    """ This is used to identify all links that need to be rewritten so that they link to the original site
+class UrlManager(object):
+    """ A simple helper class which provides functions for interogating and modifying urls
     """
-    urlobj = urlparse.urlparse(url)
-    return not urlobj.netloc
 
-def relative_to_absolute_href(href, default_url_object):
-    """ Takes an href from a link and replaces missing (relative) componets with absolute components from the current remote path.
-        This way href="#introduction" becomes href="<full path># introduction"
-    """
-    urlobj = urlparse.urlparse(href)
-    result = list(urlobj)
+    def __init__(self, url, fallback_scheme=None, fallback_netloc=None):
+        # First check whether this url starts with 'http'. If it doesn't and there is a fallback scheme, attempt prepend this to the url
+        # Note that url may remain unchanged even if it does meet this first condition
+        if not url.startswith("http") and fallback_scheme:
+            # If url[0] is '/', attempt to treat url as a relative url
+            if url[0] == '/':
+                # Since this is meant to be a relative url, require a fallback_netloc or do nothing
+                if fallback_netloc:
+                    url = fallback_scheme + fallback_netloc + url
+            else:
+                # This is to be treated as a full url so just prepend the scheme
+                url = fallback_scheme + url
+        self._urlobj = urlparse.urlparse(url)
 
-    if not urlobj.scheme:
-        result[0] = default_url_object.scheme
-    if not urlobj.netloc:
-        result[1] = default_url_object.netloc
-    if not urlobj.path:
-        result[2] = default_url_object.path
-    if not urlobj.query:
-        result[4] = default_url_object.query
+    def matches_domain(self, domain):
+        """ Returns true if this instance's url points to the given domain.
+        """
+        return self._urlobj.netloc and self._urlobj.netloc.endswith(domain)
 
-    return urlparse.urlunparse(result)
+    def url_is_relative(self):
+        """ Returns true if the url for this instance does not identify a website and web protocol
+        """
+        return not self._urlobj.netloc
+
+    def to_list(self):
+        return list(self._urlobj)
+
+    def absolute_url(self, reference_url_object):
+        """ Given a reference url object, provide any of the following values, if they are missing: scheme, netloc, relative path, query string
+            reference_url_object should be an instance of urlparse.ParseResult or an equivalent object
+            This way href="#introduction" becomes href="<full path># introduction"
+        """
+        # Convert the url object for this instance to a list
+        result = list(self._urlobj)
+
+        # Now provide any missing url components using the reference url object
+        if not self._urlobj.scheme:
+            result[0] = reference_url_object.scheme
+        if not self._urlobj.netloc:
+            result[1] = reference_url_object.netloc
+        if not self._urlobj.path:
+            result[2] = reference_url_object.path
+        if not self._urlobj.query:
+            result[4] = reference_url_object.query
+
+        # Return the result list converted to a url
+        return urlparse.urlunparse(result)
 
 def get_wiki_page_redirect(request, errors):
     """ This page accepts a form post containing the value 'target_wiki_page' and redirects to a site page matching the relative url of the wikipedia page
@@ -57,17 +85,17 @@ def get_wiki_page_redirect(request, errors):
 
     # There is a post specifying a target page
     try:
-        if target_wiki_page.startswith("http"):
-            urlobj = urlparse.urlparse(target_wiki_page)
-        else:
-            urlobj = urlparse.urlparse(wikipedia_scheme+target_wiki_page.strip("/"))
-        
-        if urlobj.netloc.endswith(wikipedia_domain):
-            # Convert urlobj to a list and set its scheme and netloc components to ''
-            urlobj = list(urlobj)
-            urlobj[0] = ""
+        # Create an instance of UrlManager with fallback options for creating a full url from a partial one
+        # Eg: if '/wiki/Satchel' is provided convert it into 'https://wikipedia.org/wiki/Satchel'
+        #     if 'wiki/Satchel' is provided, assume that 'wiki' is the netloc
+        url_manager = UrlManager(target_wiki_page, fallback_scheme=wikipedia_scheme, fallback_netloc=wikipedia_domain)
+
+        if url_manager.matches_domain(wikipedia_domain):
+            # Convert url_manager to a list and set its scheme to ''
+            url_parts = url_manager.to_list()
+            url_parts[0] = ""
             # With the scheme removed, calculate a relative url path to the resource
-            wiki_location = urlparse.urlunparse(urlobj).strip("/")
+            wiki_location = urlparse.urlunparse(url_parts).strip("/")
             return exc.HTTPFound(request.route_url("wiki_toc", wiki_location=wiki_location))
         else:
             logging.error("User supplied url, '%s', is not a valid wikipedia url.", target_wiki_page)
@@ -101,13 +129,15 @@ def wiki_toc(request):
     template_parameters = default_template_parameters.copy()
     
     if request.matchdict["wiki_location"]:
+        # Get the relative path to the wikipedia resouce; it is always defined by the trailing components of the 'wiki_toc' route
         wiki_location = "/".join(request.matchdict["wiki_location"])
         template_parameters["title"] = wiki_location
         
         # Fetch the page  - not that the default timeout for urllib2 is being used
         try:
+            # Prepend the default wikipedia scheme to the url location (which should be 'https://')
             url = wikipedia_scheme + wiki_location
-            default_url_object = urlparse.urlparse(url)
+            reference_url_object = urlparse.urlparse(url)
             page = urllib2.urlopen(url)
             html = page.read()
             soup = BeautifulSoup(html, 'lxml')
@@ -120,8 +150,9 @@ def wiki_toc(request):
                 toc = toc[0]
                 # Fix any relative hrefs so that they link to the original site
                 for a in toc.find_all('a'):
-                    if is_relative_url(a["href"]):
-                        a["href"] = relative_to_absolute_href(a["href"], default_url_object)
+                    url_manager = UrlManager(a["href"])
+                    if url_manager.url_is_relative():
+                        a["href"] = url_manager.absolute_url(reference_url_object)
                     a["target"] = "_NEW"
             else:
                 template_parameters["toc"] = None
