@@ -166,7 +166,7 @@ def wiki_toc(request):
                         a["href"] = url_manager.absolute_url(reference_url_object)
                     a["target"] = "_NEW"
             else:
-                template_parameters["toc"] = None
+                template_parameters["toc"] = ''
                 errors.append("No table of contents is available.")
 
             template_parameters["toc"] = toc
